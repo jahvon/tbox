@@ -85,7 +85,7 @@ var _ = Describe("Request Runner", func() {
 				},
 			}
 
-			ctx.Logger.EXPECT().Infox(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+			ctx.Logger.EXPECT().Infox(gomock.Any(), gomock.Any(), gomock.Regex("value")).Times(1)
 			err := requestRnr.Exec(ctx.Ctx, exec, mockEngine, make(map[string]string))
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -109,6 +109,21 @@ var _ = Describe("Request Runner", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = os.Stat(filepath.Clean(filepath.Join(ctx.Ctx.CurrentWorkspace.Location(), "response.json")))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should transform the response when specified", func() {
+			exec := &executable.Executable{
+				Request: &executable.RequestExecutableType{
+					URL:               "https://httpbin.org/get",
+					Method:            executable.RequestExecutableTypeMethodGET,
+					TransformResponse: `upper(body)`,
+					LogResponse:       true,
+				},
+			}
+
+			ctx.Logger.EXPECT().Infox(gomock.Any(), gomock.Any(), gomock.Regex("HTTPS://HTTPBIN.ORG")).Times(1)
+			err := requestRnr.Exec(ctx.Ctx, exec, mockEngine, make(map[string]string))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

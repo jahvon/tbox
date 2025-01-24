@@ -13,7 +13,7 @@ import (
 	"github.com/jahvon/flow/types/executable"
 )
 
-func IsTruthy(ex string, env *ExpressionData) (bool, error) {
+func IsTruthy(ex string, env any) (bool, error) {
 	output, err := Evaluate(ex, env)
 	if err != nil {
 		return false, err
@@ -35,7 +35,7 @@ func IsTruthy(ex string, env *ExpressionData) (bool, error) {
 	}
 }
 
-func Evaluate(ex string, env *ExpressionData) (interface{}, error) {
+func Evaluate(ex string, env any) (interface{}, error) {
 	program, err := expr.Compile(ex, expr.Env(env))
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func Evaluate(ex string, env *ExpressionData) (interface{}, error) {
 	return output, nil
 }
 
-func EvaluateString(ex string, env *ExpressionData) (string, error) {
+func EvaluateString(ex string, env any) (string, error) {
 	output, err := Evaluate(ex, env)
 	if err != nil {
 		return "", err
@@ -64,6 +64,7 @@ type CtxData struct {
 	Workspace     string `expr:"workspace"`
 	Namespace     string `expr:"namespace"`
 	WorkspacePath string `expr:"workspacePath"`
+	FlowFileName  string `expr:"flowFileName"`
 	FlowFilePath  string `expr:"flowFilePath"`
 	FlowFileDir   string `expr:"flowFileDir"`
 }
@@ -81,13 +82,15 @@ func ExpressionEnv(
 	executable *executable.Executable,
 	dataMap, envMap map[string]string,
 ) ExpressionData {
+	fn := filepath.Base(filepath.Base(executable.FlowFilePath()))
 	return ExpressionData{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 		Ctx: &CtxData{
 			Workspace:     ctx.CurrentWorkspace.AssignedName(),
-			Namespace:     ctx.CurrentWorkspace.AssignedName(),
+			Namespace:     ctx.Config.CurrentNamespace,
 			WorkspacePath: executable.WorkspacePath(),
+			FlowFileName:  fn,
 			FlowFilePath:  executable.FlowFilePath(),
 			FlowFileDir:   filepath.Dir(executable.FlowFilePath()),
 		},

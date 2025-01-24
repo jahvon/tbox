@@ -22,17 +22,18 @@ type Artifact struct {
 	// same name.
 	DstName string `json:"dstName,omitempty" yaml:"dstName,omitempty" mapstructure:"dstName,omitempty"`
 
-	// A condition to determine if the artifact should be copied. The condition is
-	// evaluated using Go templating
-	// from the form data. If the condition is not met, the artifact will not be
-	// copied.
-	// [Sprig functions](https://masterminds.github.io/sprig/) are available for use
-	// in the condition.
+	// An expression that determines whether the the artifact should be copied, using
+	// the Expr language syntax.
+	// The expression is evaluated at runtime and must resolve to a boolean value. If
+	// the condition is not met,
+	// the artifact will not be copied.
 	//
-	// For example, to copy the artifact only if the `name` field is set:
-	// ```
-	// {{ if .name }}true{{ end }}
-	// ```
+	// The expression has access to OS/architecture information (os, arch),
+	// environment variables (env), form input
+	// (form), and context information (name, workspace, directory, etc.).
+	//
+	// See the [flow documentation](https://flowexec.io/#/guide/templating) for more
+	// information.
 	//
 	If string `json:"if,omitempty" yaml:"if,omitempty" mapstructure:"if,omitempty"`
 
@@ -127,17 +128,18 @@ type TemplateRefConfig struct {
 	//
 	Cmd string `json:"cmd,omitempty" yaml:"cmd,omitempty" mapstructure:"cmd,omitempty"`
 
-	// A condition to determine if the executable should be run. The condition is
-	// evaluated using Go templating
-	// from the form data. If the condition is not met, the executable run will be
-	// skipped.
-	// [Sprig functions](https://masterminds.github.io/sprig/) are available for use
-	// in the condition.
+	// An expression that determines whether the executable should be run, using the
+	// Expr language syntax.
+	// The expression is evaluated at runtime and must resolve to a boolean value. If
+	// the condition is not met,
+	// the executable will be skipped.
 	//
-	// For example, to run a command only if the `name` field is set:
-	// ```
-	// {{ if .name }}true{{ end }}
-	// ```
+	// The expression has access to OS/architecture information (os, arch),
+	// environment variables (env), form input
+	// (form), and context information (name, workspace, directory, etc.).
+	//
+	// See the [flow documentation](https://flowexec.io/#/guide/templating) for more
+	// information.
 	//
 	If string `json:"if,omitempty" yaml:"if,omitempty" mapstructure:"if,omitempty"`
 

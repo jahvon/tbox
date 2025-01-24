@@ -44,9 +44,9 @@ var _ = Describe("Rest", func() {
 				Method:  "GET",
 				Timeout: 30 * time.Second,
 			}
-			body, err := rest.SendRequest(req, []int{http.StatusOK})
+			resp, err := rest.SendRequest(req, []int{http.StatusOK})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(body).To(ContainSubstring("\"url\": \"https://httpbin.org/get\""))
+			Expect(resp.Body).To(ContainSubstring("\"url\": \"https://httpbin.org/get\""))
 		})
 
 		It("should timeout when the request takes longer than the specified timeout", func() {
@@ -67,9 +67,9 @@ var _ = Describe("Rest", func() {
 				Headers: map[string]string{"Test-Header": "Test-Value"},
 				Timeout: 30 * time.Second,
 			}
-			body, err := rest.SendRequest(req, []int{http.StatusOK})
+			resp, err := rest.SendRequest(req, []int{http.StatusOK})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(body).To(ContainSubstring("\"Test-Header\": \"Test-Value\""))
+			Expect(resp.Body).To(ContainSubstring("\"Test-Header\": \"Test-Value\""))
 		})
 	})
 })

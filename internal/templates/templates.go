@@ -6,12 +6,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
-	"github.com/Masterminds/sprig/v3"
 	tuikitIO "github.com/jahvon/tuikit/io"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
@@ -20,6 +17,7 @@ import (
 	"github.com/jahvon/flow/internal/filesystem"
 	"github.com/jahvon/flow/internal/runner"
 	"github.com/jahvon/flow/internal/runner/engine"
+	"github.com/jahvon/flow/internal/services/expr"
 	"github.com/jahvon/flow/internal/utils"
 	argUtils "github.com/jahvon/flow/internal/utils/args"
 	execUtils "github.com/jahvon/flow/internal/utils/executables"
@@ -42,12 +40,12 @@ func ProcessTemplate(
 		flowfileName += executable.FlowFileExt
 	}
 
-	data := make(map[string]string)
+	formMap := make(map[string]string)
 	if template.Form != nil {
 		if err := showForm(ctx, template.Form); err != nil {
 			return err
 		}
-		data = template.Form.ValueMap()
+		formMap = template.Form.ValueMap()
 	}
 
 	env := os.Environ()
@@ -63,13 +61,14 @@ func ProcessTemplate(
 		"template", template.Location(), "output", fullPath,
 	)
 
-	data["FlowWorkspace"] = ws.AssignedName()
-	data["FlowWorkspacePath"] = ws.Location()
-	data["FlowFileName"] = flowfileName
-	data["FlowFilePath"] = fullPath
+	dataMap := newExpressionData(
+		ws.AssignedName(), ws.Location(),
+		flowfileName, flowfileDir, fullPath, template.Location(),
+		envMap, formMap,
+	)
 
 	if err := runExecutables(
-		ctx, ws, "pre-run", filepath.Dir(template.Location()), template.PreRun, envMap, data,
+		ctx, ws, "pre-run", filepath.Dir(template.Location()), template.PreRun, dataMap,
 	); err != nil {
 		return err
 	}
@@ -79,13 +78,13 @@ func ProcessTemplate(
 		ws.Location(),
 		filepath.Dir(template.Location()),
 		flowfileDir,
-		data, envMap,
+		dataMap,
 	); err != nil {
 		return err
 	}
 
 	if template.Template != "" {
-		flowfile, err := templateToFlowfile(template, data)
+		flowfile, err := templateToFlowfile(template, dataMap)
 		if err != nil {
 			return err
 		}
@@ -99,7 +98,7 @@ func ProcessTemplate(
 			return errors.Wrap(err, fmt.Sprintf("unable to write flowfile %s from template", flowfileName))
 		}
 	}
-	if err := runExecutables(ctx, ws, "post-run", flowfileDir, template.PostRun, envMap, data); err != nil {
+	if err := runExecutables(ctx, ws, "post-run", flowfileDir, template.PostRun, dataMap); err != nil {
 		return err
 	}
 
@@ -112,13 +111,12 @@ func runExecutables(
 	ws *workspace.Workspace,
 	stage, flowfileDir string,
 	execs []executable.TemplateRefConfig,
-	envMap map[string]string,
-	templateData map[string]string,
+	templateData expressionData,
 ) error {
 	ctx.Logger.Debugf("running %d %s executables", len(execs), stage)
 	for i, e := range execs {
 		if e.If != "" {
-			eval, err := goTemplateEvaluatedTrue(flowfileDir, e.If, templateData)
+			eval, err := expr.IsTruthy(e.If, templateData)
 			if err != nil {
 				return errors.Wrap(err, "unable to evaluate if condition")
 			}
@@ -149,7 +147,8 @@ func runExecutables(
 			return errors.New("post-run executable must have a ref or cmd")
 		}
 		execEnv := make(map[string]string)
-		maps.Copy(execEnv, envMap)
+		ee := expressionEnv(templateData)
+		maps.Copy(execEnv, ee)
 		if len(e.Args) > 0 {
 			args := make([]string, 0)
 			for _, arg := range e.Args {
@@ -159,7 +158,7 @@ func runExecutables(
 				}
 				args = append(args, a.String())
 			}
-			a, err := argUtils.ProcessArgs(exec, args, envMap)
+			a, err := argUtils.ProcessArgs(exec, args, ee)
 			if err != nil {
 				ctx.Logger.Error(err, "unable to process arguments")
 			}
@@ -180,14 +179,14 @@ func parseSourcePath(
 	logger tuikitIO.Logger,
 	name, flowFileSrc, wsDir string,
 	artifact executable.Artifact,
-	data, envMap map[string]string,
+	templateData expressionData,
 ) (string, error) {
 	var err error
 	if artifact.SrcDir != "" {
-		flowFileSrc = utils.ExpandDirectory(logger, artifact.SrcDir, wsDir, flowFileSrc, envMap)
+		flowFileSrc = utils.ExpandDirectory(logger, artifact.SrcDir, wsDir, flowFileSrc, expressionEnv(templateData))
 	}
 	var sb *bytes.Buffer
-	sb, err = processAsGoTemplate(name, filepath.Join(flowFileSrc, artifact.SrcName), data)
+	sb, err = processAsGoTemplate(name, filepath.Join(flowFileSrc, artifact.SrcName), templateData)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to process artifact as template")
 	}
@@ -198,15 +197,15 @@ func parseDestinationPath(
 	logger tuikitIO.Logger,
 	name, dstDir, flowFileSrc, wsDir string,
 	artifact executable.Artifact,
-	data, envMap map[string]string,
+	templateData expressionData,
 ) (string, error) {
 	var err error
 	if artifact.DstDir != "" {
-		dstDir = utils.ExpandDirectory(logger, artifact.DstDir, wsDir, flowFileSrc, envMap)
+		dstDir = utils.ExpandDirectory(logger, artifact.DstDir, wsDir, flowFileSrc, expressionEnv(templateData))
 	}
 	dstName := artifact.DstName
 	var db *bytes.Buffer
-	db, err = processAsGoTemplate(name, dstName, data)
+	db, err = processAsGoTemplate(name, dstName, templateData)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to process artifact as template")
 	}
@@ -216,9 +215,9 @@ func parseDestinationPath(
 
 func templateToFlowfile(
 	t *executable.Template,
-	data map[string]string,
+	templateData expressionData,
 ) (*executable.FlowFile, error) {
-	buf, err := processAsGoTemplate(t.Name(), t.Template, data)
+	buf, err := processAsGoTemplate(t.Name(), t.Template, templateData)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("flowfile template %s", t.Name()))
 	}
@@ -231,30 +230,18 @@ func templateToFlowfile(
 	return flowfile, nil
 }
 
-func processAsGoTemplate(fileName, txt string, data map[string]string) (*bytes.Buffer, error) {
-	tmpl, err := template.New(fileName).Funcs(sprig.TxtFuncMap()).Parse(txt)
-	if err != nil {
+func processAsGoTemplate(fileName, txt string, data expressionData) (*bytes.Buffer, error) {
+	tmpl := expr.NewTemplate(fileName, data)
+	if err := tmpl.Parse(txt); err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to parse %s template", fileName))
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := tmpl.Execute(&buf); err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to execute %s template", fileName))
 	}
 
 	return &buf, nil
-}
-
-func goTemplateEvaluatedTrue(fileName, txt string, data map[string]string) (bool, error) {
-	t, err := template.New(fileName).Funcs(sprig.FuncMap()).Parse(txt)
-	if err != nil {
-		return false, errors.Wrap(err, fmt.Sprintf("unable to parse %s template", fileName))
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return false, errors.Wrap(err, "unable to evaluate template")
-	}
-	return strconv.ParseBool(buf.String())
 }
 
 // templateParent returns a pseudo-executable that can be used as a parent for other executables. It simply includes

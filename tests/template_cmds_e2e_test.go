@@ -34,8 +34,8 @@ var _ = Describe("flowfile template commands e2e", Ordered, func() {
 			Executables: []*executable.Executable{
 				{
 					Verb: "exec",
-					Name: "{{ .Name }}",
-					Exec: &executable.ExecExecutableType{Cmd: fmt.Sprintf("echo '%s'", "{{ .Msg }}")}},
+					Name: "{{ name }}",
+					Exec: &executable.ExecExecutableType{Cmd: fmt.Sprintf("echo '%s'", "{{ form['Msg'] }}")}},
 			},
 		}
 		tmplStr, err := tmpl.YAML()
@@ -63,7 +63,7 @@ var _ = Describe("flowfile template commands e2e", Ordered, func() {
 			},
 			PostRun: []executable.TemplateRefConfig{
 				{
-					Cmd: "touch {{ .Name }}",
+					Cmd: "touch {{ name }}",
 				},
 			},
 		}

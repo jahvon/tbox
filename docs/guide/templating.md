@@ -100,18 +100,18 @@ files will only be copied if the `Type` field is set to `Helm`. The `deploy.sh` 
 artifacts:
   - srcName: "helm-deploy.sh"
     srcDir: "scripts" # By default, the file will be copied from the template directory. This field can be used to specify a different directory.
-    if: "{{ eq .Type 'Helm' }}" # This will only copy the file if the Helm field is true
+    if: form["Type"] == "Helm" # This will only copy the file if the Helm field is true
   - srcName: "deploy.sh"
     srcDir: "scripts"
-    if: "{{ eq .Type 'K8s' }}" # This will only copy the file if the K8s field is true
+    if: form["Type"] == "K8s" # This will only copy the file if the K8s field is true
   - srcName: "values.yaml.tmpl"
     asTemplate: true
     dstName: "values.yaml"
-    if: "{{ eq .Type 'Helm' }}" # This will only copy the file if the Helm field is true
+    if: form["Type"] == "Helm" # This will only copy the file if the Helm field is true
   - srcName: "resources.yaml.tmpl"
     asTemplate: true
     dstName: "resources.yaml"
-    if: "{{ eq .Type 'K8s' }}" # This will only copy the file if the K8s field is true
+    if: form["Type"] == "K8s" # This will only copy the file if the K8s field is true
 ```
 
 ### flowfile template string
@@ -126,22 +126,22 @@ template: |
   tags: [k8s]
   executables:
     - verb: deploy
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       exec:
-        file: "{{ if eq .Type 'Helm' }}helm-deploy.sh{{ else }}deploy.sh{{ end }}"
+        file: "{{ if form["Type"] == 'Helm' }}helm-deploy.sh{{ else }}deploy.sh{{ end }}"
         params:
           - envKey: "NAMESPACE"
-            text: "{{ .Namespace }}"
+            text: "{{ form["Namespace"] }}"
           - envKey: "APP_NAME"
-            text: "{{ .FlowFileName }}"
+            text: "{{ name }}"
     - verb: restart
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       exec:
-        cmd: "kubectl rollout restart deployment/{{ .FlowFileName }} -n {{ .Namespace }}"
+        cmd: "kubectl rollout restart deployment/{{ name }} -n {{ form["Namespace"] }}"
     - verb: open
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       launch:
-        uri: "https://{{ .FlowFileName }}.my.haus"
+        uri: "https://{{ name }}.my.haus"
 ```
 
 ### Pre- and post- run executables
@@ -156,14 +156,15 @@ Before exiting, it will also run a simple command and either open the flowfile i
 preRun:
   - ref: "validate k8s/validation:context" # You can reference other executables that you have on your system
     args: ["homelab"]
-    if: "{{ .Deploy }}"
+    if: form["Deploy"]
 postRun:
-  - cmd: "echo 'Rendered {{ if .Helm }}Helm values{{ else }}k8s manifest{{end}}'; ls -al"
+  - cmd: |
+      echo 'Rendered {{ if form["Helm"] }}Helm values{{ else }}k8s manifest{{end}}'; ls -al
   - ref: "edit vscode"
-    args: ["{{ .FlowFilePath }}"]
-    if: "{{ not .Deploy }}"
-  - ref: "deploy {{ .FlowFileName }}"
-    if: "{{ .Deploy }}"
+    args: ["{{ flowFilePath }}"]
+    if: not form["Deploy"]
+  - ref: "deploy {{ name }}"
+    if: form["Deploy"]
 ```
 
 **Note**: preRun executables are run from the template directory, while postRun executables are run from the output directory.
@@ -215,36 +216,56 @@ postRun:
   - ref: "edit vscode"
     args: ["{{ .FlowFilePath }}"]
     if: "{{ not .Deploy }}"
-  - ref: "deploy {{ .FlowFileName }}"
+  - ref: "deploy {{ .name }}"
     if: "{{ .Deploy }}"
 template: |
   tags: [k8s]
   executables:
     - verb: deploy
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       exec:
         file: "{{ if eq .Type 'Helm' }}helm-deploy.sh{{ else }}deploy.sh{{ end }}"
         params:
           - envKey: "NAMESPACE"
-            text: "{{ .Namespace }}"
+            text: "{{ .form.namespace }}"
           - envKey: "APP_NAME"
-            text: "{{ .FlowFileName }}"
+            text: "{{ name }}"
     - verb: restart
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       exec:
         cmd: "kubectl rollout restart deployment/{{ .FlowFileName }} -n {{ .Namespace }}"
     - verb: open
-      name: "{{ .FlowFileName }}"
+      name: "{{ name }}"
       launch:
-        uri: "https://{{ .FlowFileName }}.my.haus"
-``` 
+        uri: "https://{{ name }}.my.haus"
+```
+### Templating language
 
-### Template helpers
+flow uses a hybrid of [Go text templating](https://pkg.go.dev/text/template) and [Expr](https://expr-lang.org) language for
+rendering templates.
 
-Templates can use the [Sprig functions](https://masterminds.github.io/sprig/) to manipulate data during the rendering process.
-Additionally, the following keys are available to the template:
+Aside from the `if` field in the artifacts, preRun, and postRun sections, all other fields that use templating
+will need to include the `{{` and `}}` delimiters to indicate that the text should be rendered as a template.
 
-- `FlowFileName`: The name of the flowfile being rendered. This is the argument passed into the `generate` command.
-- `FlowFilePath`: The output path to the flowfile being rendered.
-- `FlowWorkspace`: The name of the workspace that the template is rendering into.
-- `FlowWorkspacePath`: The path to the workspace root directory.
+**Template Variables**
+
+The following variables are automatically available in all template expressions:
+
+| Variable        | Type                   | Description                                                      |
+|-----------------|------------------------|------------------------------------------------------------------|
+| `os`            | string                 | Operating system identifier (e.g., "linux", "darwin", "windows") |
+| `arch`          | string                 | System architecture (e.g., "amd64", "arm64")                     |
+| `workspace`     | string                 | Target workspace name                                            |
+| `workspacePath` | string                 | Full path to the target workspace root directory                 |
+| `name`          | string                 | Name provided for the newly rendered flow file                   |
+| `directory`     | string                 | Target directory that the template will be render in to          |
+| `flowFilePath`  | string                 | Full path to the target flow file                                |
+| `templatePath`  | string                 | Path to the template file being rendered                         |
+| `env`           | map (string -> string) | Environment variables accessible to the template                 |
+| `form`          | map (string -> any)    | Values provided through template form inputs                     |
+
+**See the [Expr language documentation](https://expr-lang.org/docs/language-definition) for more information on the
+additional expression functions and syntax.**
+
+> [!NOTE]
+> The `env` map contains environment variables that were present when the template was rendered. The `form` map contains values from any form inputs defined in the template configuration.

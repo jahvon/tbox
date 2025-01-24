@@ -10,7 +10,7 @@ template: |
   namespace: examples
   executables:
     - verb: run
-      name: "{{ .Color }}-msg"
-      description: Created from a template in {{ .FlowWorkspace }}
+      name: {{ form["Color"] }}-msg
+      description: Created from a template in {{ workspace }}
       exec:
         cmd: cat message.txt

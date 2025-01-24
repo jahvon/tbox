@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/itchyny/gojq"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 
 	"github.com/jahvon/flow/internal/context"
 	"github.com/jahvon/flow/internal/runner"
 	"github.com/jahvon/flow/internal/runner/engine"
+	"github.com/jahvon/flow/internal/services/expr"
 	"github.com/jahvon/flow/internal/services/rest"
 	"github.com/jahvon/flow/types/executable"
 )
@@ -63,8 +63,9 @@ func (r *requestRunner) Exec(
 		return errors.Wrap(err, "request failed")
 	}
 
+	respStr := resp.Body
 	if requestSpec.TransformResponse != "" {
-		resp, err = executeJQQuery(requestSpec.TransformResponse, resp)
+		respStr, err = expr.EvaluateString(requestSpec.TransformResponse, resp)
 		if err != nil {
 			return errors.Wrap(err, "unable to transform response")
 		}
@@ -72,7 +73,7 @@ func (r *requestRunner) Exec(
 
 	logger := ctx.Logger
 	if requestSpec.LogResponse {
-		logger.Infox(fmt.Sprintf("Successfully sent request to %s", requestSpec.URL), "response", resp)
+		logger.Infox(fmt.Sprintf("Successfully sent request to %s", requestSpec.URL), "response", respStr)
 	} else {
 		logger.Infof("Successfully sent request to %s", requestSpec.URL)
 	}
@@ -92,7 +93,7 @@ func (r *requestRunner) Exec(
 		}
 
 		err = writeResponseToFile(
-			resp,
+			respStr,
 			filepath.Join(targetDir, requestSpec.ResponseFile.Filename),
 			requestSpec.ResponseFile.SaveAs,
 		)
@@ -104,30 +105,6 @@ func (r *requestRunner) Exec(
 	}
 
 	return nil
-}
-
-func executeJQQuery(query, resp string) (string, error) {
-	var respMap map[string]interface{}
-	err := json.Unmarshal([]byte(resp), &respMap)
-	if err != nil {
-		return "", errors.New("response is not a valid JSON string")
-	}
-
-	jqQuery, err := gojq.Parse(query)
-	if err != nil {
-		return "", err
-	}
-
-	iter := jqQuery.Run(respMap)
-	result, ok := iter.Next()
-	if !ok {
-		return "", errors.New("unable to execute jq query")
-	}
-	if err, isErr := result.(error); isErr {
-		return "", err
-	}
-
-	return fmt.Sprintf("%v", result), nil
 }
 
 func writeResponseToFile(resp, responseFile string, format executable.RequestResponseFileSaveAs) error {

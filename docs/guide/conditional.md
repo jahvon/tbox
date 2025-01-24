@@ -5,7 +5,7 @@ using a simple expression language that provides access to system information, e
 
 ### Expression Language
 
-Flow uses the [Expr](https://expr-lang.org) language for evaluating conditions. The language supports common
+flow uses the [Expr](https://expr-lang.org) language for evaluating conditions. The language supports common
 operators and functions while providing access to flow executable-specific context data.
 
 **See the [Expr language documentation](https://expr-lang.org/docs/language-definition) for more information on the

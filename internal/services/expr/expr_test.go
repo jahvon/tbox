@@ -80,7 +80,7 @@ var _ = Describe("Expr", func() {
 		})
 	})
 
-	var _ = Describe("ExpressionData", func() {
+	Describe("ExpressionData", func() {
 		var (
 			data *expr.ExpressionData
 		)

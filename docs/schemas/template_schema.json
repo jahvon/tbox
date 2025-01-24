@@ -30,7 +30,7 @@
           "default": ""
         },
         "if": {
-          "description": "A condition to determine if the artifact should be copied. The condition is evaluated using Go templating \nfrom the form data. If the condition is not met, the artifact will not be copied.\n[Sprig functions](https://masterminds.github.io/sprig/) are available for use in the condition.\n\nFor example, to copy the artifact only if the `name` field is set:\n```\n{{ if .name }}true{{ end }}\n```\n",
+          "description": "An expression that determines whether the the artifact should be copied, using the Expr language syntax. \nThe expression is evaluated at runtime and must resolve to a boolean value. If the condition is not met, \nthe artifact will not be copied.\n\nThe expression has access to OS/architecture information (os, arch), environment variables (env), form input \n(form), and context information (name, workspace, directory, etc.).\n\nSee the [flow documentation](https://flowexec.io/#/guide/templating) for more information.\n",
           "type": "string",
           "default": ""
         },
@@ -121,7 +121,7 @@
           "default": ""
         },
         "if": {
-          "description": "A condition to determine if the executable should be run. The condition is evaluated using Go templating \nfrom the form data. If the condition is not met, the executable run will be skipped.\n[Sprig functions](https://masterminds.github.io/sprig/) are available for use in the condition.\n\nFor example, to run a command only if the `name` field is set:\n```\n{{ if .name }}true{{ end }}\n```\n",
+          "description": "An expression that determines whether the executable should be run, using the Expr language syntax. \nThe expression is evaluated at runtime and must resolve to a boolean value. If the condition is not met, \nthe executable will be skipped.\n\nThe expression has access to OS/architecture information (os, arch), environment variables (env), form input \n(form), and context information (name, workspace, directory, etc.).\n\nSee the [flow documentation](https://flowexec.io/#/guide/templating) for more information.\n",
           "type": "string",
           "default": ""
         },

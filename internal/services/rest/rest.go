@@ -21,12 +21,19 @@ type Request struct {
 	Timeout time.Duration
 }
 
-func SendRequest(reqSpec *Request, validStatusCodes []int) (string, error) {
+type Response struct {
+	Status  string      `expr:"status"`
+	Code    int         `expr:"code"`
+	Body    string      `expr:"body"`
+	Headers http.Header `expr:"headers"`
+}
+
+func SendRequest(reqSpec *Request, validStatusCodes []int) (*Response, error) {
 	setRequestDefaults(reqSpec)
 	client := http.Client{Timeout: reqSpec.Timeout}
 	reqURL, err := url.Parse(reqSpec.URL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	headers := make(http.Header)
@@ -44,19 +51,25 @@ func SendRequest(reqSpec *Request, validStatusCodes []int) (string, error) {
 
 	httpResp, err := client.Do(&req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer httpResp.Body.Close()
 
 	if !isStatusCodeAccepted(httpResp.StatusCode, validStatusCodes) {
-		return "", ErrUnexpectedStatusCode
+		return nil, ErrUnexpectedStatusCode
 	}
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(respBody), nil
+	resp := &Response{
+		Status:  httpResp.Status,
+		Code:    httpResp.StatusCode,
+		Body:    string(respBody),
+		Headers: httpResp.Header,
+	}
+	return resp, nil
 }
 
 func setRequestDefaults(req *Request) {
