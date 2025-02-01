@@ -20,7 +20,7 @@ require (
 	github.com/otiai10/copy v1.14.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	go.etcd.io/bbolt v1.3.11
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.31.0
